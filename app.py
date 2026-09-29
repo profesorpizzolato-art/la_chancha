@@ -1,3 +1,11 @@
+import time
+import mercadopago
+import streamlit as st
+
+# 1. Inicialización segura del SDK de Mercado Pago
+mp_access_token = st.secrets.get("MP_ACCESS_TOKEN", "")
+sdk = mercadopago.SDK(mp_access_token) if mp_access_token else None
+
 # --- TAB 1: COMPRA DE PARTICIPACIONES ---
 with tab_comprar:
     st.subheader("Adquirir Participaciones")
@@ -20,6 +28,8 @@ with tab_comprar:
                 if submit:
                     if not nombre or not email:
                         st.error("⚠️ Por favor completa tu nombre y correo electrónico.")
+                    elif not sdk:
+                        st.error("🔑 Falta configurar `MP_ACCESS_TOKEN` en los Secrets de Streamlit.")
                     else:
                         base_url = st.secrets.get("APP_URL", "https://tu-app.streamlit.app")
                         clean_name = nombre.strip().replace("&", "y")
@@ -48,7 +58,7 @@ with tab_comprar:
                             "external_reference": f"DRAW_{draw['id']}_{int(time.time())}"
                         }
 
-                        # Mostrar un spinner para avisar al usuario
+                        # Conexión con spinner
                         with st.spinner("Conectando con Mercado Pago..."):
                             try:
                                 preference_response = sdk.preference().create(preference_data)
@@ -61,7 +71,18 @@ with tab_comprar:
                                     st.link_button("👉 Abrir Pasarela de Mercado Pago", init_point, type="primary", use_container_width=True)
                                 else:
                                     st.error(f"❌ Error de API ({status_code}): {response_body.get('message', 'Respuesta no válida')}")
-                                    st.json(response_body) # Muestra el detalle del error en pantalla
+                                    st.json(response_body)
                                     
                             except Exception as e:
                                 st.error(f"🚨 Excepción al conectar con Mercado Pago: {e}")
+
+    with col_f2:
+        st.markdown(f"""
+        <div style="background-color: #1e222d; padding: 15px; border-radius: 8px;">
+            <b>Información General:</b><br>
+            • Sorteo: <b>{draw['name']}</b><br>
+            • Estado: <b>{draw['status']}</b><br>
+            • Precio por unidad: <b>$ {draw['price']:,.0f}</b><br>
+            • Participaciones emitidas: <b>{len(participants)}</b>
+        </div>
+        """, unsafe_allow_html=True)
