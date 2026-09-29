@@ -5,9 +5,15 @@ import random
 from datetime import datetime, timedelta
 
 import streamlit as st
-import mercadopago
 
-# Asegurar path
+# Manejo seguro de importación de Mercado Pago
+try:
+    import mercadopago
+except ModuleNotFoundError:
+    st.error("⚠️ La librería 'mercadopago' no está instalada en el entorno. Revisa tu archivo 'requirements.txt' y realiza un Reboot desde Manage App.")
+    st.stop()
+
+# Asegurar path para la base de datos
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from database import (
@@ -23,8 +29,8 @@ from database import (
 st.set_page_config(page_title="LA CHANCHA 🐷", page_icon="🐷", layout="wide")
 init_db()
 
-# Inicializar cliente de Mercado Pago (usar st.secrets en producción)
-MP_ACCESS_TOKEN = st.secrets.get("MP_ACCESS_TOKEN", "TU_ACCESS_TOKEN_PROD_O_TEST")
+# Inicializar cliente de Mercado Pago
+MP_ACCESS_TOKEN = st.secrets.get("MP_ACCESS_TOKEN", "TEST-TU-ACCESS-TOKEN-AQUI")
 sdk = mercadopago.SDK(MP_ACCESS_TOKEN)
 
 # Estilos CSS
@@ -56,11 +62,57 @@ st.divider()
 
 draw = get_draw()
 
+# --- PROCESAMIENTO DE RETORNO DE MERCADO PAGO ---
+query_params = st.query_params
+payment_status = query_params.get("payment_status") or query_params.get("status")
+payment_id = query_params.get("payment_id") or query_params.get("collection_id")
+
+if payment_status and draw:
+    if payment_status == "approved" and payment_id:
+        # Recuperar datos temporales del comprador si existen en sesión
+        payer_name = st.session_state.get("last_payer_name", "Comprador Registrado")
+        payer_email = st.session_state.get("last_payer_email", "pago_mp@lachancha.com")
+        qty = st.session_state.get("last_qty", 1)
+        
+        # Registrar tickets en SQLite
+        tickets = register_successful_payment(draw["id"], payment_id, payer_name, payer_email, qty)
+        
+        if tickets:
+            st.balloons()
+            st.success(f"🎉 **¡Pago aprobado!** Se han emitido tus tickets: **{', '.join(tickets)}**")
+        else:
+            st.info("ℹ️ Tus tickets para esta transacción ya fueron asignados previamente.")
+            
+    elif payment_status == "pending":
+        st.warning("⌛ Tu pago está pendiente de confirmación por Mercado Pago.")
+    elif payment_status == "failed":
+        st.error("❌ El pago fue rechazado o cancelado. Inténtalo de nuevo.")
+
+# Si no hay sorteo activo
 if not draw:
-    st.info("No hay ningún sorteo activo.")
+    st.info("No hay ningún sorteo activo en este momento.")
+    
+    # Crear un nuevo sorteo desde la interfaz si no existe
+    with st.expander("➕ Crear Nuevo Sorteo"):
+        with st.form("new_draw_form"):
+            d_name = st.text_input("Nombre del Sorteo", value="El Chanchazo Semanal 🚀")
+            d_price = st.number_input("Precio por Ticket ($)", value=1000.0, step=100.0)
+            d_hours = st.number_input("Duración (Horas)", value=24, min_value=1)
+            d_prize = st.slider("Porcentaje de Premio (%)", min_value=10, max_value=90, value=50)
+            
+            if st.form_submit_button("Crear Sorteo"):
+                create_draw(
+                    name=d_name,
+                    price=d_price,
+                    start=datetime.now(),
+                    end=datetime.now() + timedelta(hours=d_hours),
+                    prize_percent=d_prize
+                )
+                st.success("¡Sorteo creado exitosamente!")
+                st.rerun()
     st.stop()
 
-# Datos del sorteo
+# Datos del sorteo activo
 participants = get_participants(draw["id"])
 recaudado = len(participants) * draw["price"]
 premio = recaudado * draw["prize_percent"] / 100
@@ -82,72 +134,77 @@ with c3:
 
 st.write("")
 
-# Comprobación de retorno de pago por URL (retorno desde Mercado Pago)
-query_params = st.query_params
-if "payment_status" in query_params:
-    if query_params["payment_status"] == "approved":
-        st.success("🎉 ¡Pago aprobado con éxito! Tus tickets han sido asignados.")
-    elif query_params["payment_status"] == "pending":
-        st.warning("⌛ Tu pago está pendiente de aprobación.")
-
 tab_comprar, tab_lista, tab_admin = st.tabs(["💳 Comprar Participaciones", "👥 Participantes", "⚙️ Administración"])
 
-# --- TAB 1: COMPRA DE PARTICIPACIONES REALES ---
+# --- TAB 1: COMPRA DE PARTICIPACIONES ---
 with tab_comprar:
     st.subheader("Adquirir Participaciones")
     
     col_f1, col_f2 = st.columns([2, 1])
     with col_f1:
-        with st.form("checkout_form"):
-            nombre = st.text_input("Nombre y Apellido*", placeholder="Ej: Juan Pérez")
-            email = st.text_input("Correo Electrónico*", placeholder="ejemplo@email.com")
-            cantidad = st.number_input("Cantidad de participaciones", min_value=1, max_value=50, value=1)
-            
-            total_pagar = cantidad * draw["price"]
-            st.markdown(f"**Total a pagar: $ {total_pagar:,.0f} ARS**".replace(",", "."))
-            
-            submit = st.form_submit_button("💳 Pagar con Mercado Pago", type="primary")
-            
-            if submit:
-                if not nombre or not email:
-                    st.error("Por favor completa tu nombre y correo electrónico.")
-                else:
-                    # Crear preferencia de pago en Mercado Pago
-                    preference_data = {
-                        "items": [
-                            {
-                                "title": f"Participación Sorteo: {draw['name']}",
-                                "quantity": int(cantidad),
-                                "unit_price": float(draw["price"]),
-                                "currency_id": "ARS"
-                            }
-                        ],
-                        "payer": {
-                            "name": nombre,
-                            "email": email
-                        },
-                        "back_urls": {
-                            "success": "https://tu-app.streamlit.app/?payment_status=approved",
-                            "failure": "https://tu-app.streamlit.app/?payment_status=failed",
-                            "pending": "https://tu-app.streamlit.app/?payment_status=pending"
-                        },
-                        "auto_return": "approved",
-                        "external_reference": f"DRAW_{draw['id']}_{int(time.time())}"
-                    }
+        if draw.get("status") == "CLOSED":
+            st.error("🔒 Este sorteo ya se encuentra cerrado. Espera al próximo.")
+        else:
+            with st.form("checkout_form"):
+                nombre = st.text_input("Nombre y Apellido*", placeholder="Ej: Juan Pérez")
+                email = st.text_input("Correo Electrónico*", placeholder="ejemplo@email.com")
+                cantidad = st.number_input("Cantidad de participaciones", min_value=1, max_value=50, value=1)
+                
+                total_pagar = cantidad * draw["price"]
+                st.markdown(f"**Total a pagar: $ {total_pagar:,.0f} ARS**".replace(",", "."))
+                
+                submit = st.form_submit_button("💳 Pagar con Mercado Pago", type="primary")
+                
+                if submit:
+                    if not nombre or not email:
+                        st.error("Por favor completa tu nombre y correo electrónico.")
+                    else:
+                        # Guardar temporalmente en sesión para recuperar tras la redirección
+                        st.session_state["last_payer_name"] = nombre.strip()
+                        st.session_state["last_payer_email"] = email.strip()
+                        st.session_state["last_qty"] = int(cantidad)
 
-                    preference_response = sdk.preference().create(preference_data)
-                    preference = preference_response["response"]
-                    
-                    # Redirección al checkout seguro
-                    init_point = preference["init_point"]
-                    st.markdown(f'👉 [**Haz clic aquí para completar el pago de forma segura**]({init_point})')
-                    st.link_button("Ir a Pagar", init_point, type="primary")
+                        # Detectar URL base de la app automáticamente
+                        base_url = st.secrets.get("APP_URL", "https://tu-app.streamlit.app")
+
+                        preference_data = {
+                            "items": [
+                                {
+                                    "title": f"Participación Sorteo: {draw['name']}",
+                                    "quantity": int(cantidad),
+                                    "unit_price": float(draw["price"]),
+                                    "currency_id": "ARS"
+                                }
+                            ],
+                            "payer": {
+                                "name": nombre.strip(),
+                                "email": email.strip()
+                            },
+                            "back_urls": {
+                                "success": f"{base_url}/?payment_status=approved",
+                                "failure": f"{base_url}/?payment_status=failed",
+                                "pending": f"{base_url}/?payment_status=pending"
+                            },
+                            "auto_return": "approved",
+                            "external_reference": f"DRAW_{draw['id']}_{int(time.time())}"
+                        }
+
+                        try:
+                            preference_response = sdk.preference().create(preference_data)
+                            preference = preference_response["response"]
+                            init_point = preference["init_point"]
+                            
+                            st.success("✅ Pre-orden de pago generada.")
+                            st.link_button("👉 Ir a pagar en Mercado Pago", init_point, type="primary", use_container_width=True)
+                        except Exception as e:
+                            st.error(f"Error al conectar con Mercado Pago: {e}")
 
     with col_f2:
         st.markdown(f"""
         <div class="card">
             <b>Información General:</b><br>
             • Sorteo: <b>{draw['name']}</b><br>
+            • Estado: <b>{draw['status']}</b><br>
             • Precio por unidad: <b>$ {draw['price']:,.0f}</b><br>
             • Participaciones emitidas: <b>{len(participants)}</b>
         </div>
@@ -169,14 +226,29 @@ with tab_lista:
 with tab_admin:
     st.subheader("⚙️ Control del Sorteo")
     
-    # Contraseña simple para el panel de administración
     admin_pass = st.text_input("Clave de Administrador", type="password")
     
     if admin_pass == st.secrets.get("ADMIN_PASSWORD", "admin123"):
-        if st.button("🎲 CERRAR Y SORTEAR GANADOR", type="primary"):
-            result = draw_winner(draw["id"])
-            if result:
-                st.balloons()
-                st.success(f"🎉 Ganador confirmado: Ticket {result['ticket']} — {result['name']}")
-            else:
-                st.error("No hay tickets en el sorteo.")
+        st.success("🔑 Modo Administrador Autenticado")
+        
+        col_adm1, col_adm2 = st.columns(2)
+        
+        with col_adm1:
+            if st.button("🎲 CERRAR Y SORTEAR GANADOR", type="primary", use_container_width=True):
+                result = draw_winner(draw["id"])
+                if result:
+                    st.balloons()
+                    st.success(f"🎉 Ganador confirmado: Ticket **{result['ticket']}** — **{result['name']}**")
+                else:
+                    st.error("No hay tickets válidos en el sorteo.")
+                    
+        with col_adm2:
+            if st.button("➕ Finalizar Sorteo Actual y Crear Uno Nuevo", use_container_width=True):
+                from database import conn
+                c = conn()
+                cur = c.cursor()
+                cur.execute("UPDATE draws SET status='CLOSED' WHERE id=?", (draw["id"],))
+                c.commit()
+                c.close()
+                st.success("Sorteo cerrado. Actualiza para crear uno nuevo.")
+                st.rerun()
