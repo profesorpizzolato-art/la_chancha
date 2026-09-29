@@ -3,7 +3,6 @@ import random
 import sqlite3
 from datetime import datetime
 
-# Rutas absolutas para compatibilidad con Streamlit Cloud
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DB_DIR, "la_chancha.db")
@@ -16,6 +15,7 @@ def conn():
 def init_db():
     c = conn()
     cur = c.cursor()
+    # Tabla de Sorteos
     cur.execute("""
         CREATE TABLE IF NOT EXISTS draws (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,12 +28,29 @@ def init_db():
             winning_ticket TEXT
         )
     """)
+    # Tabla de Pagos / Ordenes
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            draw_id INTEGER NOT NULL,
+            payment_id TEXT UNIQUE,
+            payer_name TEXT NOT NULL,
+            payer_email TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            created_at TEXT NOT NULL
+        )
+    """)
+    # Tabla de Participantes (Tickets emitidos únicamente con pago APROBADO)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS participants (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             draw_id INTEGER NOT NULL,
+            payment_id TEXT,
             ticket TEXT NOT NULL UNIQUE,
             name TEXT NOT NULL,
+            email TEXT NOT NULL,
             created_at TEXT NOT NULL
         )
     """)
@@ -78,20 +95,28 @@ def get_participants(draw_id):
     c.close()
     return [{"ticket": r[0], "name": r[1], "created_at": r[2]} for r in rows]
 
-def add_demo_participants(draw_id, quantity, price):
+def register_successful_payment(draw_id, payment_id, name, email, quantity):
+    """
+    Función invocada al confirmar el pago para emitir tickets reales.
+    """
     c = conn()
     cur = c.cursor()
+    tickets_generados = []
+    
     for _ in range(quantity):
         ticket = f"LC-{random.randint(100000, 999999)}-{random.randint(10, 99)}"
         try:
             cur.execute(
-                "INSERT INTO participants(draw_id, ticket, name, created_at) VALUES(?, ?, ?, ?)",
-                (draw_id, ticket, "Participante Demo", datetime.now().isoformat())
+                "INSERT INTO participants(draw_id, payment_id, ticket, name, email, created_at) VALUES(?, ?, ?, ?, ?, ?)",
+                (draw_id, payment_id, ticket, name, email, datetime.now().isoformat())
             )
+            tickets_generados.append(ticket)
         except sqlite3.IntegrityError:
             pass
+            
     c.commit()
     c.close()
+    return tickets_generados
 
 def draw_winner(draw_id):
     c = conn()
