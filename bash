@@ -1,12 +1,10 @@
-pip install mercadopago
-# 1. Asegúrate de añadir el archivo
-git add requirements.txt
+# 1. Asegúrate de tener el archivo con el nombre exacto en inglés
+echo "streamlit" > requirements.txt
+echo "mercadopago" >> requirements.txt
 
-# 2. Haz el commit
-git commit -m "Fix: agregar requirements.txt correcto para mercadopago"
-
-# 3. Súbelo a la rama principal
-git push origin main
+# 2. Guarda los cambios en Git
 git add requirements.txt
-git commit -m "Fix: asegurar requirements.txt en raiz con mercadopago"
-git push origin main
+git commit -m "Fix: add mercadopago to requirements.txt"
+
+# 3. Subí los cambios (probamos push a main y a master)
+git push origin main || git push origin master
