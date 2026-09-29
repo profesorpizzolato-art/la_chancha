@@ -1,0 +1,15 @@
+# Base de datos local (para evitar sobrescribir datos en producción)
+data/*.db
+*.db
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+
+# Archivo de secretos local (¡NUNCA subas credenciales a GitHub!)
+.streamlit/secrets.toml
+
+# Entorno virtual local (si usas uno)
+.venv/
+venv/
+env/
