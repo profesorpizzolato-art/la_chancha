@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import streamlit as st
 from datetime import datetime, timedelta
 from database import init_db, get_draw, create_draw, add_demo_participants, draw_winner, get_participants
