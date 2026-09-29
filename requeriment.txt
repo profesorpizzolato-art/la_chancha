@@ -3,3 +3,5 @@ streamlit>=1.40,<2
 data/*.db
 __pycache__/
 *.pyc
+streamlit
+mercadopago
