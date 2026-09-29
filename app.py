@@ -1,168 +1,3 @@
-import sys
-import os
-import time
-import random
-from datetime import datetime, timedelta
-
-import streamlit as st
-
-# Manejo seguro de importación de Mercado Pago
-try:
-    import mercadopago
-except ModuleNotFoundError:
-    st.error("⚠️ La librería 'mercadopago' no está instalada en el entorno. Revisa tu archivo 'requirements.txt' y realiza un Reboot desde Manage App.")
-    st.stop()
-
-# Asegurar path para la base de datos
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from database import (
-    init_db,
-    get_draw,
-    create_draw,
-    get_participants,
-    register_successful_payment,
-    draw_winner
-)
-
-# Configuración de página
-st.set_page_config(page_title="LA CHANCHA 🐷", page_icon="🐷", layout="wide")
-init_db()
-
-# Inicializar cliente de Mercado Pago
-MP_ACCESS_TOKEN = st.secrets.get("MP_ACCESS_TOKEN", "TEST-TU-ACCESS-TOKEN-AQUI")
-sdk = mercadopago.SDK(MP_ACCESS_TOKEN)
-
-# --- ESTILOS CSS CON LA PALETA OFICIAL DE LA CHANCHA ---
-st.markdown("""
-<style>
-:root {
-    --rosa-principal: #FF416C;
-    --violeta-oscuro: #2D0B5A;
-    --dorado-amarillo: #FFD700;
-    --carbon: #1A1A1A;
-}
-
-.main-title { 
-    font-size: 3.5rem; 
-    font-weight: 900; 
-    color: var(--rosa-principal); 
-    text-shadow: 2px 2px 0px var(--violeta-oscuro);
-    line-height: 1; 
-}
-.subtitle { font-size: 1.1rem; color: #6c757d; margin-bottom: 1rem; }
-
-.pozo-box {
-    background: linear-gradient(135deg, #FFD700, #F27121);
-    color: var(--carbon); 
-    padding: 1.5rem; 
-    border-radius: 18px; 
-    text-align: center;
-    font-weight: bold;
-}
-.premio-box {
-    background: linear-gradient(135deg, #FF416C, #8A2387);
-    color: white; 
-    padding: 1.5rem; 
-    border-radius: 18px; 
-    text-align: center;
-}
-.timer-box {
-    background: linear-gradient(135deg, #2D0B5A, #1A1A1A);
-    color: #FFD700; 
-    padding: 1.5rem; 
-    border-radius: 18px; 
-    text-align: center;
-    border: 2px solid #FFD700;
-}
-.value-num { font-size: 2.8rem; font-weight: 900; }
-.card { padding: 1.2rem; border-radius: 15px; background: #f8f9fa; border: 1px solid #e9ecef; }
-</style>
-""", unsafe_allow_html=True)
-
-# Encabezado
-st.markdown('<div class="main-title">🐷 LA CHANCHA</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Sorteos transparentes en tiempo real.</div>', unsafe_allow_html=True)
-st.divider()
-
-draw = get_draw()
-
-# --- PROCESAMIENTO DE RETORNO DE MERCADO PAGO ---
-query_params = st.query_params
-payment_status = query_params.get("payment_status") or query_params.get("status") or query_params.get("collection_status")
-payment_id = query_params.get("payment_id") or query_params.get("collection_id")
-
-if payment_status and draw:
-    if payment_status == "approved" and payment_id:
-        # Recuperar datos desde los query params enviados en back_urls
-        payer_name = query_params.get("p_name", "Comprador Registrado")
-        payer_email = query_params.get("p_email", "pago_mp@lachancha.com")
-        try:
-            qty = int(query_params.get("p_qty", 1))
-        except ValueError:
-            qty = 1
-        
-        # Registrar tickets en la base de datos
-        tickets = register_successful_payment(draw["id"], payment_id, payer_name, payer_email, qty)
-        
-        if tickets:
-            st.balloons()
-            st.success(f"🎉 **¡Pago aprobado!** Se han emitido tus tickets: **{', '.join(tickets)}**")
-        else:
-            st.info("ℹ️ Tus tickets para esta transacción ya fueron asignados previamente.")
-            
-    elif payment_status == "pending":
-        st.warning("⌛ Tu pago está pendiente de confirmación por Mercado Pago.")
-    elif payment_status in ["failed", "rejected"]:
-        st.error("❌ El pago fue rechazado o cancelado. Inténtalo de nuevo.")
-
-# Si no hay sorteo activo
-if not draw:
-    st.info("No hay ningún sorteo activo en este momento.")
-    
-    with st.expander("➕ Crear Nuevo Sorteo"):
-        with st.form("new_draw_form"):
-            d_name = st.text_input("Nombre del Sorteo", value="El Chanchazo Semanal 🚀")
-            d_price = st.number_input("Precio por Ticket ($)", value=1000.0, step=100.0)
-            d_hours = st.number_input("Duración (Horas)", value=24, min_value=1)
-            d_prize = st.slider("Porcentaje de Premio (%)", min_value=10, max_value=90, value=50)
-            
-            if st.form_submit_button("Crear Sorteo"):
-                create_draw(
-                    name=d_name,
-                    price=d_price,
-                    start=datetime.now(),
-                    end=datetime.now() + timedelta(hours=d_hours),
-                    prize_percent=d_prize
-                )
-                st.success("¡Sorteo creado exitosamente!")
-                st.rerun()
-    st.stop()
-
-# Datos del sorteo activo
-participants = get_participants(draw["id"])
-recaudado = len(participants) * draw["price"]
-premio = recaudado * draw["prize_percent"] / 100
-
-# Conteo de tiempo
-end_time = datetime.fromisoformat(draw["end"])
-restante = max(0, int((end_time - datetime.now()).total_seconds()))
-horas, rem = divmod(restante, 3600)
-minutos, segundos = divmod(rem, 60)
-
-# Métricas
-c1, c2, c3 = st.columns(3)
-with c1:
-    st.markdown(f'<div class="pozo-box"><div style="font-size:1.1rem;">💰 Pozo Acumulado</div><div class="value-num">$ {recaudado:,.0f}</div></div>'.replace(",", "."), unsafe_allow_html=True)
-with c2:
-    st.markdown(f'<div class="premio-box"><div style="font-size:1.1rem;">🏆 Premio ({draw["prize_percent"]:.0f}%)</div><div class="value-num">$ {premio:,.0f}</div></div>'.replace(",", "."), unsafe_allow_html=True)
-with c3:
-    st.markdown(f'<div class="timer-box"><div style="font-size:1.1rem;">⏱️ Tiempo Restante</div><div class="value-num">{horas:02d}:{minutos:02d}:{segundos:02d}</div></div>', unsafe_allow_html=True)
-
-st.write("")
-
-tab_comprar, tab_lista, tab_admin = st.tabs(["💳 Comprar Participaciones", "👥 Participantes", "⚙️ Administración"])
-
 # --- TAB 1: COMPRA DE PARTICIPACIONES ---
 with tab_comprar:
     st.subheader("Adquirir Participaciones")
@@ -184,13 +19,13 @@ with tab_comprar:
                 
                 if submit:
                     if not nombre or not email:
-                        st.error("Por favor completa tu nombre y correo electrónico.")
+                        st.error("⚠️ Por favor completa tu nombre y correo electrónico.")
                     else:
                         base_url = st.secrets.get("APP_URL", "https://tu-app.streamlit.app")
                         clean_name = nombre.strip().replace("&", "y")
                         clean_email = email.strip()
 
-                        # Generar preferencia incluyendo los datos del comprador en la URL de retorno
+                        # Preferencia de Mercado Pago
                         preference_data = {
                             "items": [
                                 {
@@ -213,62 +48,20 @@ with tab_comprar:
                             "external_reference": f"DRAW_{draw['id']}_{int(time.time())}"
                         }
 
-                        try:
-                            preference_response = sdk.preference().create(preference_data)
-                            preference = preference_response["response"]
-                            init_point = preference["init_point"]
-                            
-                            st.success("✅ Pre-orden de pago generada.")
-                            st.link_button("👉 Ir a pagar en Mercado Pago", init_point, type="primary", use_container_width=True)
-                        except Exception as e:
-                            st.error(f"Error al conectar con Mercado Pago: {e}")
-
-    with col_f2:
-        st.markdown(f"""
-        <div class="card">
-            <b>Información General:</b><br>
-            • Sorteo: <b>{draw['name']}</b><br>
-            • Estado: <b>{draw['status']}</b><br>
-            • Precio por unidad: <b>$ {draw['price']:,.0f}</b><br>
-            • Participaciones emitidas: <b>{len(participants)}</b>
-        </div>
-        """, unsafe_allow_html=True)
-
-# --- TAB 2: LISTA DE PARTICIPACIONES ---
-with tab_lista:
-    st.subheader(f"🎟️ Tickets Confirmados ({len(participants)})")
-    if participants:
-        st.dataframe(
-            [{"Ticket N°": p["ticket"], "Participante": p["name"], "Fecha": p["created_at"]} for p in participants],
-            use_container_width=True,
-            hide_index=True
-        )
-    else:
-        st.info("Aún no hay tickets confirmados mediante pago.")
-
-# --- TAB 3: PANEL DE ADMINISTRACIÓN ---
-with tab_admin:
-    st.subheader("⚙️ Control del Sorteo")
-    
-    admin_pass = st.text_input("Clave de Administrador", type="password")
-    
-    if admin_pass == st.secrets.get("ADMIN_PASSWORD", "admin123"):
-        st.success("🔑 Modo Administrador Autenticado")
-        
-        col_adm1, col_adm2 = st.columns(2)
-        
-        with col_adm1:
-            if st.button("🎲 CERRAR Y SORTEAR GANADOR", type="primary", use_container_width=True):
-                result = draw_winner(draw["id"])
-                if result:
-                    st.balloons()
-                    st.success(f"🎉 Ganador confirmado: Ticket **{result['ticket']}** — **{result['name']}**")
-                else:
-                    st.error("No hay tickets válidos en el sorteo.")
-                    
-        with col_adm2:
-            if st.button("➕ Finalizar Sorteo Actual y Crear Uno Nuevo", use_container_width=True):
-                from database import close_draw
-                close_draw(draw["id"])
-                st.success("Sorteo cerrado. Actualiza para crear uno nuevo.")
-                st.rerun()
+                        # Mostrar un spinner para avisar al usuario
+                        with st.spinner("Conectando con Mercado Pago..."):
+                            try:
+                                preference_response = sdk.preference().create(preference_data)
+                                status_code = preference_response.get("status")
+                                response_body = preference_response.get("response", {})
+                                
+                                if status_code in [200, 201]:
+                                    init_point = response_body.get("init_point")
+                                    st.success("✅ Pre-orden generada correctamente.")
+                                    st.link_button("👉 Abrir Pasarela de Mercado Pago", init_point, type="primary", use_container_width=True)
+                                else:
+                                    st.error(f"❌ Error de API ({status_code}): {response_body.get('message', 'Respuesta no válida')}")
+                                    st.json(response_body) # Muestra el detalle del error en pantalla
+                                    
+                            except Exception as e:
+                                st.error(f"🚨 Excepción al conectar con Mercado Pago: {e}")
