@@ -1,0 +1,18 @@
+@app.post("/webhook")
+async def mp_webhook(request: Request):
+    data = await request.json()
+    if data.get("type") == "payment":
+        payment_id = data["data"]["id"]
+        # Consultar estado del pago a MP
+        payment_info = sdk.payment().get(payment_id)["response"]
+        
+        if payment_info["status"] == "approved":
+            # Extraer datos y registrar los tickets en SQLite/PostgreSQL
+            register_successful_payment(
+                draw_id=1,
+                payment_id=payment_id,
+                name=payment_info["payer"]["first_name"],
+                email=payment_info["payer"]["email"],
+                quantity=int(payment_info["additional_info"]["items"][0]["quantity"])
+            )
+    return {"status": "ok"}
