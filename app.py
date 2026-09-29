@@ -33,22 +33,47 @@ init_db()
 MP_ACCESS_TOKEN = st.secrets.get("MP_ACCESS_TOKEN", "TEST-TU-ACCESS-TOKEN-AQUI")
 sdk = mercadopago.SDK(MP_ACCESS_TOKEN)
 
-# Estilos CSS
+# --- ESTILOS CSS CON LA PALETA OFICIAL DE LA CHANCHA ---
 st.markdown("""
 <style>
-.main-title { font-size: 3.5rem; font-weight: 900; color: #E63946; line-height: 1; }
+:root {
+    --rosa-principal: #FF416C;
+    --violeta-oscuro: #2D0B5A;
+    --dorado-amarillo: #FFD700;
+    --carbon: #1A1A1A;
+}
+
+.main-title { 
+    font-size: 3.5rem; 
+    font-weight: 900; 
+    color: var(--rosa-principal); 
+    text-shadow: 2px 2px 0px var(--violeta-oscuro);
+    line-height: 1; 
+}
 .subtitle { font-size: 1.1rem; color: #6c757d; margin-bottom: 1rem; }
+
 .pozo-box {
-    background: linear-gradient(135deg, #11998e, #38ef7d);
-    color: white; padding: 1.5rem; border-radius: 18px; text-align: center;
+    background: linear-gradient(135deg, #FFD700, #F27121);
+    color: var(--carbon); 
+    padding: 1.5rem; 
+    border-radius: 18px; 
+    text-align: center;
+    font-weight: bold;
 }
 .premio-box {
-    background: linear-gradient(135deg, #FF416C, #FF4B2B);
-    color: white; padding: 1.5rem; border-radius: 18px; text-align: center;
+    background: linear-gradient(135deg, #FF416C, #8A2387);
+    color: white; 
+    padding: 1.5rem; 
+    border-radius: 18px; 
+    text-align: center;
 }
 .timer-box {
-    background: linear-gradient(135deg, #8A2387, #E94057, #F27121);
-    color: white; padding: 1.5rem; border-radius: 18px; text-align: center;
+    background: linear-gradient(135deg, #2D0B5A, #1A1A1A);
+    color: #FFD700; 
+    padding: 1.5rem; 
+    border-radius: 18px; 
+    text-align: center;
+    border: 2px solid #FFD700;
 }
 .value-num { font-size: 2.8rem; font-weight: 900; }
 .card { padding: 1.2rem; border-radius: 15px; background: #f8f9fa; border: 1px solid #e9ecef; }
@@ -64,17 +89,20 @@ draw = get_draw()
 
 # --- PROCESAMIENTO DE RETORNO DE MERCADO PAGO ---
 query_params = st.query_params
-payment_status = query_params.get("payment_status") or query_params.get("status")
+payment_status = query_params.get("payment_status") or query_params.get("status") or query_params.get("collection_status")
 payment_id = query_params.get("payment_id") or query_params.get("collection_id")
 
 if payment_status and draw:
     if payment_status == "approved" and payment_id:
-        # Recuperar datos temporales del comprador si existen en sesión
-        payer_name = st.session_state.get("last_payer_name", "Comprador Registrado")
-        payer_email = st.session_state.get("last_payer_email", "pago_mp@lachancha.com")
-        qty = st.session_state.get("last_qty", 1)
+        # Recuperar datos desde los query params enviados en back_urls
+        payer_name = query_params.get("p_name", "Comprador Registrado")
+        payer_email = query_params.get("p_email", "pago_mp@lachancha.com")
+        try:
+            qty = int(query_params.get("p_qty", 1))
+        except ValueError:
+            qty = 1
         
-        # Registrar tickets en SQLite
+        # Registrar tickets en la base de datos
         tickets = register_successful_payment(draw["id"], payment_id, payer_name, payer_email, qty)
         
         if tickets:
@@ -85,14 +113,13 @@ if payment_status and draw:
             
     elif payment_status == "pending":
         st.warning("⌛ Tu pago está pendiente de confirmación por Mercado Pago.")
-    elif payment_status == "failed":
+    elif payment_status in ["failed", "rejected"]:
         st.error("❌ El pago fue rechazado o cancelado. Inténtalo de nuevo.")
 
 # Si no hay sorteo activo
 if not draw:
     st.info("No hay ningún sorteo activo en este momento.")
     
-    # Crear un nuevo sorteo desde la interfaz si no existe
     with st.expander("➕ Crear Nuevo Sorteo"):
         with st.form("new_draw_form"):
             d_name = st.text_input("Nombre del Sorteo", value="El Chanchazo Semanal 🚀")
@@ -159,14 +186,11 @@ with tab_comprar:
                     if not nombre or not email:
                         st.error("Por favor completa tu nombre y correo electrónico.")
                     else:
-                        # Guardar temporalmente en sesión para recuperar tras la redirección
-                        st.session_state["last_payer_name"] = nombre.strip()
-                        st.session_state["last_payer_email"] = email.strip()
-                        st.session_state["last_qty"] = int(cantidad)
-
-                        # Detectar URL base de la app automáticamente
                         base_url = st.secrets.get("APP_URL", "https://tu-app.streamlit.app")
+                        clean_name = nombre.strip().replace("&", "y")
+                        clean_email = email.strip()
 
+                        # Generar preferencia incluyendo los datos del comprador en la URL de retorno
                         preference_data = {
                             "items": [
                                 {
@@ -177,11 +201,11 @@ with tab_comprar:
                                 }
                             ],
                             "payer": {
-                                "name": nombre.strip(),
-                                "email": email.strip()
+                                "name": clean_name,
+                                "email": clean_email
                             },
                             "back_urls": {
-                                "success": f"{base_url}/?payment_status=approved",
+                                "success": f"{base_url}/?payment_status=approved&p_name={clean_name}&p_email={clean_email}&p_qty={cantidad}",
                                 "failure": f"{base_url}/?payment_status=failed",
                                 "pending": f"{base_url}/?payment_status=pending"
                             },
@@ -244,11 +268,7 @@ with tab_admin:
                     
         with col_adm2:
             if st.button("➕ Finalizar Sorteo Actual y Crear Uno Nuevo", use_container_width=True):
-                from database import conn
-                c = conn()
-                cur = c.cursor()
-                cur.execute("UPDATE draws SET status='CLOSED' WHERE id=?", (draw["id"],))
-                c.commit()
-                c.close()
+                from database import close_draw
+                close_draw(draw["id"])
                 st.success("Sorteo cerrado. Actualiza para crear uno nuevo.")
                 st.rerun()
