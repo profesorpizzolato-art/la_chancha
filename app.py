@@ -1,16 +1,44 @@
+import os
 import time
-import mercadopago
+import random
+import sqlite3
+from datetime import datetime
 import streamlit as st
+import mercadopago
+
+# Importar funciones de base de datos desde tu archivo base_de_datos.py
+try:
+    from base_de_datos import get_draw, get_participants, init_db
+    init_db()
+except ImportError:
+    pass
+
+st.set_page_config(page_title="La Chancha - Sorteos", page_icon="🐷", layout="wide")
 
 # 1. Inicialización segura del SDK de Mercado Pago
 mp_access_token = st.secrets.get("MP_ACCESS_TOKEN", "")
 sdk = mercadopago.SDK(mp_access_token) if mp_access_token else None
 
-# --- TAB 1: COMPRA DE PARTICIPACIONES ---
+# Obtener datos del sorteo activo
+draw = get_draw() or {
+    "id": 1,
+    "name": "Sorteo Demo",
+    "price": 1000.0,
+    "status": "ACTIVE"
+}
+participants = get_participants(draw["id"]) if "get_participants" in globals() else []
+
+st.title("🐷 La Chancha - Sistema de Sorteos")
+
+# 2. DEFINICIÓN DE PESTAÑAS (Esto resuelve el NameError)
+tab_comprar, tab_ganadores, tab_admin = st.tabs(["🛒 Comprar Participaciones", "🏆 Ganadores", "⚙️ Administración"])
+
+# --- PESTAÑA 1: COMPRA DE PARTICIPACIONES ---
 with tab_comprar:
     st.subheader("Adquirir Participaciones")
     
     col_f1, col_f2 = st.columns([2, 1])
+    
     with col_f1:
         if draw.get("status") == "CLOSED":
             st.error("🔒 Este sorteo ya se encuentra cerrado. Espera al próximo.")
@@ -21,13 +49,14 @@ with tab_comprar:
                 cantidad = st.number_input("Cantidad de participaciones", min_value=1, max_value=50, value=1)
                 
                 total_pagar = cantidad * draw["price"]
-                st.markdown(f"**Total a pagar: $ {total_pagar:,.0f} ARS**".replace(",", "."))
+                total_str = f"**Total a pagar: ${total_pagar:,.0f} ARS**".replace(",", ".")
+                st.markdown(total_str)
                 
-                submit = st.form_submit_button("💳 Pagar con Mercado Pago", type="primary")
+                enviar = st.form_submit_button("💳 Pagar con Mercado Pago", type="primary")
                 
-                if submit:
+                if enviar:
                     if not nombre or not email:
-                        st.error("⚠️ Por favor completa tu nombre y correo electrónico.")
+                        st.error("⚠️️ Por favor completa tu nombre y correo electrónico.")
                     elif not sdk:
                         st.error("🔑 Falta configurar `MP_ACCESS_TOKEN` en los Secrets de Streamlit.")
                     else:
@@ -77,12 +106,21 @@ with tab_comprar:
                                 st.error(f"🚨 Excepción al conectar con Mercado Pago: {e}")
 
     with col_f2:
+        price_fmt = f"${draw['price']:,.0f}".replace(",", ".")
         st.markdown(f"""
         <div style="background-color: #1e222d; padding: 15px; border-radius: 8px;">
             <b>Información General:</b><br>
             • Sorteo: <b>{draw['name']}</b><br>
             • Estado: <b>{draw['status']}</b><br>
-            • Precio por unidad: <b>$ {draw['price']:,.0f}</b><br>
+            • Precio por unidad: <b>{price_fmt}</b><br>
             • Participaciones emitidas: <b>{len(participants)}</b>
         </div>
         """, unsafe_allow_html=True)
+
+with tab_ganadores:
+    st.subheader("🏆 Ganadores de Sorteos Anteriores")
+    st.info("Aquí se mostrarán los ganadores de los sorteos finalizados.")
+
+with tab_admin:
+    st.subheader("⚙️ Panel de Administración")
+    st.info("Espacio para gestionar los sorteos y ver las ventas.")
