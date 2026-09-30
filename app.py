@@ -292,17 +292,17 @@ with tab_ganadores:
         st.info(f"🕒 El sorteo actual está activo. El ganador/a se anunciará el **{end_date_obj.strftime('%d/%m/%Y a las %H:%M hs')}**.")
 
 # ==========================================
-# PESTAÑA 3: ADMINISTRACIÓN (PROTEGIDA POR CLAVE)
+# PESTAÑA 3: ADMINISTRACIÓN
 # ==========================================
 with tab_admin:
     st.subheader("🔒 Panel de Administración Exclusivo")
     
-    # Sistema de autenticación para el panel
+    # Autenticación
     if "admin_authenticated" not in st.session_state:
         st.session_state["admin_authenticated"] = False
 
     if not st.session_state["admin_authenticated"]:
-        st.warning("Acceso restringido solo para el organizador del sorteo.")
+        st.warning("Acceso restringido solo para el organizador.")
         pass_input = st.text_input("🔑 Ingrese la contraseña de Administrador:", type="password")
         if st.button("Ingresar al Panel"):
             if pass_input == ADMIN_PASSWORD:
@@ -312,7 +312,6 @@ with tab_admin:
             else:
                 st.error("Contraseña incorrecta.")
     else:
-        # Botón para cerrar sesión de admin
         if st.button("🚪 Cerrar Sesión de Admin"):
             st.session_state["admin_authenticated"] = False
             st.rerun()
@@ -321,36 +320,32 @@ with tab_admin:
         col_adm1, col_adm2 = st.columns([1.5, 1], gap="large")
         
         with col_adm1:
-            st.write("### 📋 Listado de Participantes con Pago Comprobado")
+            st.write("### 📋 Listado de Participantes")
             if participants:
                 st.dataframe(participants, use_container_width=True)
             else:
-                st.info("Aún no se han registrado tickets para este sorteo.")
+                st.info("Aún no hay registros en el sorteo activo.")
 
         with col_adm2:
-            st.write("### 📅 Programar Fecha del Sorteo")
-            
-            with st.form("form_config_fechas"):
-                nueva_fecha = st.date_input(
-                    "Fecha de Cierre",
-                    value=end_date_obj.date()
-                )
-                nueva_hora = st.time_input(
-                    "Hora de Cierre",
-                    value=end_date_obj.time()
-                )
-                
-                btn_guardar_fecha = st.form_submit_button("💾 Guardar Fecha", type="primary", use_container_width=True)
-                
-                if btn_guardar_fecha:
-                    nueva_fechahora = datetime.combine(nueva_fecha, nueva_hora)
-                    update_draw_dates(draw["id"], datetime.now(), nueva_fechahora)
-                    st.success(f"✅ Fecha actualizada al {nueva_fechahora.strftime('%d/%m/%Y %H:%M hs')}")
-                    st.rerun()
-
-            st.markdown("---")
-            st.write("### 🎛️ Acciones de Cierre")
+            # -------------------------------------------------------------
+            # CASO A: EL SORTEO ESTÁ ACTIVO
+            # -------------------------------------------------------------
             if draw.get("status") == "ACTIVE":
+                st.write("### 📅 Programar Fecha del Sorteo Activo")
+                
+                with st.form("form_config_fechas"):
+                    nueva_fecha = st.date_input("Fecha de Cierre", value=end_date_obj.date())
+                    nueva_hora = st.time_input("Hora de Cierre", value=end_date_obj.time())
+                    btn_guardar_fecha = st.form_submit_button("💾 Guardar Fecha", type="primary", use_container_width=True)
+                    
+                    if btn_guardar_fecha:
+                        nueva_fechahora = datetime.combine(nueva_fecha, nueva_hora)
+                        update_draw_dates(draw["id"], datetime.now(), nueva_fechahora)
+                        st.success(f"✅ Fecha actualizada al {nueva_fechahora.strftime('%d/%m/%Y %H:%M hs')}")
+                        st.rerun()
+
+                st.markdown("---")
+                st.write("### 🎛️ Realizar Sorteo")
                 if st.button("🎲 ¡ELEGIR GANADOR Y CERRAR!", type="primary", use_container_width=True):
                     winner = draw_winner(draw["id"])
                     if winner:
@@ -359,5 +354,32 @@ with tab_admin:
                         st.rerun()
                     else:
                         st.warning("No hay tickets registrados para sortear.")
+
+            # -------------------------------------------------------------
+            # CASO B: EL SORTEO YA CERRÓ -> CONFIGURAR Y LARGAR OTRO
+            # -------------------------------------------------------------
             else:
-                st.write("🔒 El sorteo se encuentra cerrado.")
+                st.write("### 🚀 Largar un Nuevo Sorteo")
+                st.info("El sorteo actual está CERRADO. Completa los datos para iniciar la siguiente edición:")
+                
+                with st.form("form_nuevo_sorteo"):
+                    nuevo_nombre = st.text_input("Nombre del Sorteo", value="🐷 Gran Sorteo La Chancha - Nueva Edición")
+                    nuevo_precio = st.number_input("Precio por Ticket (ARS)", min_value=100.0, value=1000.0, step=100.0)
+                    fecha_fin = st.date_input("Fecha de Realización", value=date.today())
+                    hora_fin = st.time_input("Hora de Realización", value=dtime(22, 0))
+                    
+                    btn_crear = st.form_submit_button("✨ ¡Lanzar Nuevo Sorteo Ahora!", type="primary", use_container_width=True)
+                    
+                    if btn_crear:
+                        fechahora_fin = datetime.combine(fecha_fin, hora_fin)
+                        # Creamos el nuevo sorteo
+                        create_draw(
+                            name=nuevo_nombre,
+                            price=nuevo_precio,
+                            start=datetime.now(),
+                            end=fechahora_fin,
+                            prize_percent=50.0
+                        )
+                        st.balloons()
+                        st.success("🎉 ¡Nuevo sorteo iniciado con éxito!")
+                        st.rerun()
