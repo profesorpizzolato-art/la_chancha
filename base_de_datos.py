@@ -2,168 +2,147 @@ import os
 import random
 import sqlite3
 from datetime import datetime
-import streamlit as st
 
-# 1. IMPORTAR FUNCIONES DE BASE DE DATOS
-# Si el archivo en tu repo se llama 'base_de_datos.py'
-try:
-    from base_de_datos import (
-        init_db,
-        create_draw,
-        get_draw,
-        get_participants,
-        register_successful_payment,
-        draw_winner,
-        close_draw
-    )
-except ImportError:
-    # Si el archivo en GitHub aún se llama 'base de datos.py' (con espacios)
-    import importlib
-    db = importlib.import_module("base de datos")
-    init_db = db.init_db
-    create_draw = db.create_draw
-    get_draw = db.get_draw
-    get_participants = db.get_participants
-    register_successful_payment = db.register_successful_payment
-    draw_winner = db.draw_winner
-    close_draw = db.close_draw
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_DIR = os.path.join(BASE_DIR, "data")
+DB_PATH = os.path.join(DB_DIR, "la_chancha.db")
 
-# Configuración de página
-st.set_page_config(
-    page_title="La Chancha - Sorteos",
-    page_icon="🐷",
-    layout="wide"
-)
+def conn():
+    if not os.path.exists(DB_DIR):
+        os.makedirs(DB_DIR, exist_ok=True)
+    return sqlite3.connect(DB_PATH, timeout=15, check_same_thread=False)
 
-# 2. Inicializar la Base de Datos
-init_db()
+def init_db():
+    with conn() as c:
+        cur = c.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS draws (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                price REAL NOT NULL,
+                start TEXT NOT NULL,
+                end TEXT NOT NULL,
+                prize_percent REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                winning_ticket TEXT
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                draw_id INTEGER NOT NULL,
+                payment_id TEXT UNIQUE,
+                payer_name TEXT NOT NULL,
+                payer_email TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'PENDING',
+                created_at TEXT NOT NULL
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS participants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                draw_id INTEGER NOT NULL,
+                payment_id TEXT,
+                ticket TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        c.commit()
 
-# 3. Obtener o crear sorteo activo
-draw = get_draw()
-if not draw:
-    create_draw(
-        name="Sorteo La Chancha",
-        price=1000.0,
-        start=datetime.now(),
-        end=datetime.now(),
-        prize_percent=50.0
-    )
-    draw = get_draw()
+def create_draw(name, price, start, end, prize_percent):
+    start_str = start.isoformat() if isinstance(start, datetime) else start
+    end_str = end.isoformat() if isinstance(end, datetime) else end
 
-participants = get_participants(draw["id"])
+    with conn() as c:
+        cur = c.cursor()
+        cur.execute(
+            "INSERT INTO draws(name, price, start, end, prize_percent) VALUES(?, ?, ?, ?, ?)",
+            (name, price, start_str, end_str, prize_percent)
+        )
+        c.commit()
 
-# Título Principal
-st.title("🐷 La Chancha - Sistema de Sorteos")
-
-# 4. Estructura de Pestañas
-tab_comprar, tab_ganadores, tab_admin = st.tabs([
-    "🛒 Adquirir Participaciones",
-    "🏆 Ganadores",
-    "⚙️ Panel de Control"
-])
-
-# ==========================================
-# PESTAÑA 1: TRANSFERENCIA DIRECTA (CVU/ALIAS)
-# ==========================================
-with tab_comprar:
-    st.subheader("Compra de Tickets por Transferencia Directa")
-    
-    col_form, col_info = st.columns([2, 1])
-    
-    with col_form:
-        if draw.get("status") == "CLOSED":
-            st.error("🔒 Este sorteo se encuentra cerrado actualmente. ¡Mantente atento al próximo!")
+def get_draw(draw_id=None):
+    with conn() as c:
+        cur = c.cursor()
+        if draw_id:
+            cur.execute("SELECT * FROM draws WHERE id=?", (draw_id,))
         else:
-            with st.form("transfer_checkout_form"):
-                nombre = st.text_input("Nombre y Apellido*", placeholder="Ej: Juan Pérez")
-                email = st.text_input("Correo Electrónico*", placeholder="ejemplo@email.com")
-                cantidad = st.number_input("Cantidad de participaciones", min_value=1, max_value=50, value=1)
-                
-                total_pagar = cantidad * draw["price"]
-                st.markdown(f"### Total a transferir: **${total_pagar:,.0f} ARS**".replace(",", "."))
-                
-                # Datos bancarios / Mercado Pago para transferir
-                st.info("""
-                📌 **Datos para realizar la transferencia:**
-                * **Alias:** `la.chancha.sorteos`
-                * **CVU:** `0000003100012345678901`
-                * **Titular:** Fabricio Pizzolato
-                """)
-                
-                comprobante = st.text_input(
-                    "Número de Comprobante / Operación*",
-                    placeholder="Ej: 849201938"
-                )
-                
-                enviar = st.form_submit_button("✅ Registrar Transferencia y Generar Tickets", type="primary")
-                
-                if enviar:
-                    if not nombre.strip() or not email.strip() or not comprobante.strip():
-                        st.error("⚠️ Todos los campos son obligatorios. Ingresa tu comprobante de pago.")
-                    else:
-                        payment_key = f"TRANSF-{comprobante.strip()}"
-                        
-                        # Se registran los tickets asociándolos al comprobante
-                        tickets = register_successful_payment(
-                            draw_id=draw["id"],
-                            payment_id=payment_key,
-                            name=nombre.strip(),
-                            email=email.strip(),
-                            quantity=int(cantidad)
-                        )
-                        
-                        if tickets:
-                            st.balloons()
-                            st.success("🎉 ¡Pago registrado con éxito! Tus tickets asignados son:")
-                            for t in tickets:
-                                st.code(t, language="text")
-                            st.rerun()
+            cur.execute("SELECT * FROM draws ORDER BY id DESC LIMIT 1")
+        row = cur.fetchone()
+        
+    if not row:
+        return None
+    keys = ["id", "name", "price", "start", "end", "prize_percent", "status", "winning_ticket"]
+    return dict(zip(keys, row))
 
-    with col_info:
-        price_fmt = f"${draw['price']:,.0f}".replace(",", ".")
-        st.markdown(f"""
-        <div style="background-color: #1e222d; padding: 20px; border-radius: 8px; border: 1px solid #333;">
-            <h4 style="margin-top:0;">Detalles del Sorteo</h4>
-            • <b>Sorteo:</b> {draw['name']}<br>
-            • <b>Estado:</b> {draw['status']}<br>
-            • <b>Valor por ticket:</b> {price_fmt} ARS<br>
-            • <b>Tickets emitidos:</b> {len(participants)}
-        </div>
-        """, unsafe_allow_html=True)
+def close_draw(draw_id: int) -> bool:
+    try:
+        with conn() as c:
+            cur = c.cursor()
+            cur.execute("UPDATE draws SET status = 'CLOSED' WHERE id = ?", (draw_id,))
+            c.commit()
+            return True
+    except Exception as e:
+        print(f"Error al cerrar el sorteo {draw_id}: {e}")
+        return False
 
-# ==========================================
-# PESTAÑA 2: GANADORES
-# ==========================================
-with tab_ganadores:
-    st.subheader("🏆 Ganadores")
-    if draw.get("status") == "CLOSED" and draw.get("winning_ticket"):
-        st.success(f"🎟 **Ticket Ganador del Sorteo:** `{draw['winning_ticket']}`")
-    else:
-        st.info("El sorteo actual está activo. El ganador se publicará al momento del cierre.")
+def get_participants(draw_id):
+    with conn() as c:
+        cur = c.cursor()
+        cur.execute(
+            "SELECT ticket, name, created_at FROM participants WHERE draw_id=? ORDER BY id",
+            (draw_id,)
+        )
+        rows = cur.fetchall()
+    return [{"ticket": r[0], "name": r[1], "created_at": r[2]} for r in rows]
 
-# ==========================================
-# PESTAÑA 3: ADMINISTRACIÓN
-# ==========================================
-with tab_admin:
-    st.subheader("⚙️ Panel de Administración")
-    
-    col_admin1, col_admin2 = st.columns([2, 1])
-    
-    with col_admin1:
-        st.write("### Participantes Registrados")
-        if participants:
-            st.dataframe(participants, use_container_width=True)
-        else:
-            st.write("Aún no hay participantes registrados.")
+def register_successful_payment(draw_id, payment_id, name, email, quantity):
+    with conn() as c:
+        cur = c.cursor()
+        
+        if payment_id:
+            cur.execute("SELECT ticket FROM participants WHERE payment_id=?", (str(payment_id),))
+            existing = cur.fetchall()
+            if existing:
+                return [r[0] for r in existing]
 
-    with col_admin2:
-        st.write("### Acciones")
-        if draw.get("status") == "ACTIVE":
-            if st.button("🎲 Realizar Sorteo / Elegir Ganador", type="primary"):
-                winner = draw_winner(draw["id"])
-                if winner:
-                    st.balloons()
-                    st.success(f"¡Ganador seleccionado! Ticket: {winner['ticket']} - Nombre: {winner['name']}")
-                    st.rerun()
-                else:
-                    st.warning("No se puede realizar el sorteo sin participantes.")
+        tickets_generados = []
+        for _ in range(quantity):
+            inserted = False
+            for _ in range(5):
+                ticket = f"LC-{random.randint(100000, 999999)}-{random.randint(10, 99)}"
+                try:
+                    cur.execute(
+                        "INSERT INTO participants(draw_id, payment_id, ticket, name, email, created_at) VALUES(?, ?, ?, ?, ?, ?)",
+                        (draw_id, str(payment_id), ticket, name, email, datetime.now().isoformat())
+                    )
+                    tickets_generados.append(ticket)
+                    inserted = True
+                    break
+                except sqlite3.IntegrityError:
+                    continue
+            if not inserted:
+                print("Warning: No se pudo generar ticket único tras varios intentos.")
+                
+        c.commit()
+    return tickets_generados
+
+def draw_winner(draw_id):
+    with conn() as c:
+        cur = c.cursor()
+        cur.execute("SELECT ticket, name FROM participants WHERE draw_id=?", (draw_id,))
+        rows = cur.fetchall()
+        if not rows:
+            return None
+        
+        winner = random.SystemRandom().choice(rows)
+        cur.execute(
+            "UPDATE draws SET status='CLOSED', winning_ticket=? WHERE id=?",
+            (winner[0], draw_id)
+        )
+        c.commit()
+    return {"ticket": winner[0], "name": winner[1]}
