@@ -134,4 +134,3 @@ with tab_ganadores:
 with tab_admin:
     st.subheader("⚙️ Panel de Administración")
     st.dataframe(participants)
-    
