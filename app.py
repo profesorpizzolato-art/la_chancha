@@ -23,7 +23,7 @@ st.set_page_config(
 )
 
 # Clave de administración (Podés cambiarla por la clave que prefieras)
-ADMIN_PASSWORD = st.secrets.get("sorteando")
+ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "sorteando")
 
 # ==========================================
 # ESTILOS CSS PERSONALIZADOS (MODERNO & NEÓN)
