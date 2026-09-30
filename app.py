@@ -23,11 +23,11 @@ st.set_page_config(
 )
 
 # ==========================================
-# ESTILOS CSS PERSONALIZADOS
+# ESTILOS CSS PERSONALIZADOS (MODERNO & NEÓN)
 # ==========================================
 st.markdown("""
 <style>
-    /* Fondo con degradado moderno */
+    /* Fondo con degradado nocturno */
     .stApp {
         background: linear-gradient(135deg, #1d0933 0%, #390d59 40%, #11052c 100%);
         color: #ffffff;
@@ -72,14 +72,15 @@ st.markdown("""
         box-shadow: 0 10px 30px rgba(121, 40, 202, 0.4);
     }
 
-    /* Recuadro de Fecha del Sorteo */
+    /* Tarjeta Destacada de Fecha y Cuenta Regresiva */
     .date-card {
         background: rgba(0, 240, 255, 0.1);
         border: 2px dashed #00f0ff;
         border-radius: 15px;
         padding: 15px;
         text-align: center;
-        margin-bottom: 20px;
+        margin-top: 15px;
+        margin-bottom: 10px;
     }
 
     /* Botones principales */
@@ -93,7 +94,7 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(255, 0, 127, 0.4) !important;
     }
 
-    /* Tickets asignados */
+    /* Badges de Tickets */
     .ticket-badge {
         display: inline-block;
         background: #00f0ff;
@@ -109,10 +110,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 2. Inicializar Base de Datos
+# 2. Inicialización de Base de Datos
 init_db()
 
-# 3. Función auxiliar para actualizar la fecha del sorteo en BD
+# Función auxiliar para actualizar la fecha del sorteo en la BD
 def update_draw_dates(draw_id, start_dt, end_dt):
     with conn() as c:
         cur = c.cursor()
@@ -122,7 +123,7 @@ def update_draw_dates(draw_id, start_dt, end_dt):
         )
         c.commit()
 
-# 4. Obtener o crear sorteo activo
+# 3. Cargar datos del sorteo activo
 draw = get_draw()
 if not draw:
     create_draw(
@@ -136,25 +137,25 @@ if not draw:
 
 participants = get_participants(draw["id"])
 
-# Parsear fecha de finalización
+# Procesar la fecha de finalización desde la BD
 try:
     end_date_obj = datetime.fromisoformat(draw["end"])
 except Exception:
     end_date_obj = datetime.now()
 
-# Encabezado principal
+# Header Principal
 st.markdown('<h1 class="hero-title">🎉 🐷 LA CHANCHA SORTEOS 🐷 🎉</h1>', unsafe_allow_html=True)
-st.markdown('<p class="hero-subtitle">¡Elegí tus números, participá y llevate el pozo! 💸✨</p>', unsafe_allow_html=True)
+st.markdown('<p class="hero-subtitle">¡Elegí tus números, participá y llevate el pozo en efectivo! 💸✨</p>', unsafe_allow_html=True)
 
-# Definición de pestañas
+# Estructura de Pestañas
 tab_comprar, tab_ganadores, tab_admin = st.tabs([
     "🔥 ¡Quiero Participar!",
     "🏆 Salón de la Fama",
-    "⚙️ Zona Segreta (Admin)"
+    "⚙️ Zona Secreta (Admin)"
 ])
 
 # ==========================================
-# PESTAÑA 1: ADQUIRIR PARTICIPACIONES
+# PESTAÑA 1: COMPRAR TICKETS
 # ==========================================
 with tab_comprar:
     col_f1, col_f2 = st.columns([1.8, 1.2], gap="large")
@@ -163,12 +164,12 @@ with tab_comprar:
         if draw.get("status") == "CLOSED":
             st.error("🔒 ¡Este sorteo ya cerró! Mantente atento para el próximo lanzamiento 🚀")
         else:
-            static_mp_link = st.secrets.get("MP_STATIC_LINK", "https://mpago.la/TU_LINK")
+            static_mp_link = st.secrets.get("MP_STATIC_LINK", "https://mpago.la/19yACmp")
             
             st.markdown("""
             <div class="fun-card">
                 <h3 style="color: #00f0ff; margin-top: 0;">PASO 1: Paga tus números 💳</h3>
-                <p>Tocá el botón para abonar seguro con Mercado Pago:</p>
+                <p>Tocá el botón para realizar la transferencia de forma directa y segura con Mercado Pago:</p>
             </div>
             """, unsafe_allow_html=True)
             
@@ -179,21 +180,21 @@ with tab_comprar:
             st.markdown("""
             <div class="fun-card">
                 <h3 style="color: #ffaa00; margin-top: 0;">PASO 2: Carga tu comprobante 🎟️</h3>
-                <p>Completá el formulario para asignarte tus tickets al instante:</p>
+                <p>Ingresá tus datos para que el sistema te asigne automáticamente tus números:</p>
             </div>
             """, unsafe_allow_html=True)
 
             with st.form("manual_validation_form"):
-                nombre = st.text_input("👤 Tu Nombre y Apellido*", placeholder="Ej: Juan Pérez")
-                email = st.text_input("📧 Tu Email*", placeholder="ejemplo@email.com")
+                nombre = st.text_input("👤 Tu Nombre y Apellido*", placeholder="Ej: Cosme Fulanito")
+                email = st.text_input("📧 Tu Email (para enviarte la confirmación)*", placeholder="ejemplo@email.com")
                 cantidad = st.number_input("🎟️ ¿Cuántos tickets compraste?", min_value=1, max_value=50, value=1)
-                comprobante = st.text_input("🔢 Nº de Operación de Mercado Pago*", placeholder="Ej: 9876543210")
+                comprobante = st.text_input("🔢 Nº de Operación / Comprobante MP*", placeholder="Ej: 9876543210")
                 
                 enviar = st.form_submit_button("🎉 ¡VALIDAR Y OBTENER MIS TICKETS!", type="primary", use_container_width=True)
                 
                 if enviar:
                     if not nombre.strip() or not email.strip() or not comprobante.strip():
-                        st.error("⚠️ Por favor completa todos los campos obligatorios.")
+                        st.error("⚠️ Por favor completa todos los campos requeridos.")
                     else:
                         payment_key = f"MP-{comprobante.strip()}"
                         tickets = register_successful_payment(
@@ -206,33 +207,40 @@ with tab_comprar:
                         if tickets:
                             st.balloons()
                             st.success("🥳 ¡FELICITACIONES! Ya estás participando.")
-                            st.markdown("### 🎟️ Tus números de la suerte son:")
+                            st.markdown("### 🎟️ Tus números asignados son:")
                             badge_html = "".join([f'<span class="ticket-badge">#{t}</span>' for t in tickets])
                             st.markdown(badge_html, unsafe_allow_html=True)
                             st.rerun()
 
     with col_f2:
         price_fmt = f"${draw['price']:,.0f}".replace(",", ".")
-        formatted_end_date = end_date_obj.strftime("%d/%m/%Y a las %H:%M hs")
         
-        # Cálculo del tiempo restante
+        # Cálculo dinámico de tiempo restante
         now = datetime.now()
         time_diff = end_date_obj - now
+        
         if time_diff.total_seconds() > 0:
-            days_left = time_diff.days
-            hours_left = int(time_diff.seconds // 3600)
-            countdown_str = f"⏳ Quedan {days_left}d {hours_left}h para el sorteo"
+            days = time_diff.days
+            hours = int(time_diff.seconds // 3600)
+            minutes = int((time_diff.seconds % 3600) // 60)
+            
+            if days > 0:
+                countdown_str = f"⏳ Quedan {days}d {hours}h para el sorteo"
+            else:
+                countdown_str = f"⏳ Quedan {hours}h {minutes}m para el sorteo"
         else:
-            countdown_str = "⌛ Sorteo listo para realizarse"
+            countdown_str = "⌛ ¡Tiempo cumplido! El sorteo se realizará en breve"
+
+        formatted_end_date = end_date_obj.strftime("%d/%m/%Y a las %H:%M hs")
 
         st.markdown(f"""
         <div class="info-card">
             <h2 style="margin-top:0; text-align:center; color:#fff;">📊 ESTADO DEL SORTEO</h2>
             <hr style="border-color: rgba(255,255,255,0.3);">
-            <p style="font-size: 1.1rem;">🎯 <b>Sorteo:</b> {draw['name']}</p>
-            <p style="font-size: 1.1rem;">🔥 <b>Estado:</b> <span style="background:#00f0ff; color:#000; padding:2px 8px; border-radius:8px; font-weight:bold;">{draw['status']}</span></p>
-            <p style="font-size: 1.1rem;">💰 <b>Valor del Ticket:</b> {price_fmt} ARS</p>
-            <p style="font-size: 1.1rem;">⚡ <b>Tickets Vendidos:</b> {len(participants)}</p>
+            <p style="font-size: 1.1rem; margin-bottom: 8px;">🎯 <b>Sorteo:</b> {draw['name']}</p>
+            <p style="font-size: 1.1rem; margin-bottom: 8px;">🔥 <b>Estado:</b> <span style="background:#00f0ff; color:#000; padding:2px 8px; border-radius:8px; font-weight:bold;">{draw['status']}</span></p>
+            <p style="font-size: 1.1rem; margin-bottom: 8px;">💰 <b>Valor del Ticket:</b> {price_fmt} ARS</p>
+            <p style="font-size: 1.1rem; margin-bottom: 8px;">⚡ <b>Tickets Vendidos:</b> {len(participants)}</p>
             
             <div class="date-card">
                 <span style="font-size: 0.9rem; color: #e0c3fc;">📅 FECHA DEL SORTEO</span><br>
@@ -246,48 +254,48 @@ with tab_comprar:
 # PESTAÑA 2: GANADORES
 # ==========================================
 with tab_ganadores:
-    st.subheader("🏆 Ganadores y Premios Entregados")
+    st.subheader("🏆 Ganadores y Premios")
     if draw.get("status") == "CLOSED" and draw.get("winning_ticket"):
         st.balloons()
         st.markdown(f"""
         <div style="background: linear-gradient(90deg, #ffaa00, #ff007f); padding: 30px; border-radius: 20px; text-align: center; color: white;">
             <h1>🥇 ¡TENEMOS GANADOR/A! 🥇</h1>
-            <h2 style="font-size: 2.5rem;">🎟️️ Ticket Ganador: <span class="ticket-badge" style="font-size:2.5rem;">#{draw['winning_ticket']}</span></h2>
+            <h2 style="font-size: 2.5rem;">🎟️ Ticket Ganador: <span class="ticket-badge" style="font-size:2.5rem;">#{draw['winning_ticket']}</span></h2>
+            <p style="font-size: 1.2rem;">¡Muchas gracias a todos por participar!</p>
         </div>
         """, unsafe_allow_html=True)
     else:
-        st.info(f"🕒 El sorteo actual está activo. El ganador se anunciará el **{end_date_obj.strftime('%d/%m/%Y a las %H:%M hs')}**.")
+        st.info(f"🕒 El sorteo actual está activo. El ganador/a se anunciará el **{end_date_obj.strftime('%d/%m/%Y a las %H:%M hs')}**.")
 
 # ==========================================
 # PESTAÑA 3: ADMINISTRACIÓN
 # ==========================================
 with tab_admin:
-    st.subheader("⚙️ Panel de Control del Sorteo")
+    st.subheader("⚙️ Panel de Administración")
     
     col_adm1, col_adm2 = st.columns([1.5, 1], gap="large")
     
     with col_adm1:
-        st.write("### 📋 Participantes Registrados")
+        st.write("### 📋 Listado de Participantes")
         if participants:
             st.dataframe(participants, use_container_width=True)
         else:
-            st.info("Aún no hay tickets vendidos para este sorteo.")
+            st.info("Aún no se han registrado tickets para este sorteo.")
 
     with col_adm2:
-        st.write("### 📅 Configuración de Fecha de Sorteo")
+        st.write("### 📅 Programar Fecha del Sorteo")
         
         with st.form("form_config_fechas"):
-            # Selectores de Fecha y Hora
             nueva_fecha = st.date_input(
-                "Fecha de Cierre/Sorteo",
+                "Fecha de Cierre",
                 value=end_date_obj.date()
             )
             nueva_hora = st.time_input(
-                "Hora del Sorteo",
+                "Hora de Cierre",
                 value=end_date_obj.time()
             )
             
-            btn_guardar_fecha = st.form_submit_button("💾 Guardar Nueva Fecha", type="primary", use_container_width=True)
+            btn_guardar_fecha = st.form_submit_button("💾 Guardar Fecha", type="primary", use_container_width=True)
             
             if btn_guardar_fecha:
                 nueva_fechahora = datetime.combine(nueva_fecha, nueva_hora)
@@ -296,15 +304,15 @@ with tab_admin:
                 st.rerun()
 
         st.markdown("---")
-        st.write("### 🎛️ Finalizar Sorteo")
+        st.write("### 🎛️ Acciones de Cierre")
         if draw.get("status") == "ACTIVE":
-            if st.button("🎲 ¡ELEGIR GANADOR AHORA!", type="primary", use_container_width=True):
+            if st.button("🎲 ¡ELEGIR GANADOR Y CERRAR!", type="primary", use_container_width=True):
                 winner = draw_winner(draw["id"])
                 if winner:
                     st.balloons()
-                    st.success(f"🎉 ¡Ticket Ganador: #{winner['ticket']} - Pertenece a: {winner['name']}!")
+                    st.success(f"🎉 Ticket Ganador: #{winner['ticket']} - Asignado a: {winner['name']}")
                     st.rerun()
                 else:
-                    st.warning("Aún no hay participantes registrados.")
+                    st.warning("No hay tickets registrados para sortear.")
         else:
-            st.write("🔒 El sorteo ya finalizó.")
+            st.write("🔒 El sorteo se encuentra cerrado.")
