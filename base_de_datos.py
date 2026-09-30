@@ -146,3 +146,16 @@ def draw_winner(draw_id):
         )
         c.commit()
     return {"ticket": winner[0], "name": winner[1]}
+    
+def create_new_draw(name, price, prize_percent=50.0):
+    with conn() as c:
+        cur = c.cursor()
+        # Opcional: Cerrar cualquier sorteo que haya quedado activo
+        cur.execute("UPDATE draws SET status = 'CLOSED' WHERE status = 'ACTIVE'")
+        
+        # Insertar el nuevo sorteo
+        cur.execute("""
+            INSERT INTO draws (name, price, start, end, status, prize_percent)
+            VALUES (?, ?, ?, ?, 'ACTIVE', ?)
+        """, (name, price, datetime.now().isoformat(), datetime.now().isoformat(), prize_percent))
+        c.commit()
