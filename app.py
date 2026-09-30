@@ -306,7 +306,7 @@ with tab_admin:
         pass_input = st.text_input("🔑 Ingrese la contraseña de Administrador:", type="password")
         if st.button("Ingresar al Panel"):
             if pass_input == ADMIN_PASSWORD:
-                st.session_state["sorteando"] = True
+                st.session_state["admin_authenticated"] = True
                 st.success("¡Acceso concedido!")
                 st.rerun()
             else:
