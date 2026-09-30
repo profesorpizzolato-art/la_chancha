@@ -22,6 +22,9 @@ st.set_page_config(
     layout="wide"
 )
 
+# Clave de administración (Podés cambiarla por la clave que prefieras)
+ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "chancha2026")
+
 # ==========================================
 # ESTILOS CSS PERSONALIZADOS (MODERNO & NEÓN)
 # ==========================================
@@ -49,8 +52,18 @@ st.markdown("""
         text-align: center;
         font-size: 1.2rem;
         color: #e0c3fc;
-        margin-bottom: 30px;
+        margin-bottom: 25px;
         font-weight: 500;
+    }
+
+    /* Mensaje aclaratorio de pago obligatorio */
+    .notice-box {
+        background: rgba(255, 170, 0, 0.15);
+        border: 2px solid #ffaa00;
+        border-radius: 15px;
+        padding: 15px 20px;
+        margin-bottom: 25px;
+        text-align: center;
     }
 
     /* Tarjetas estilo Pop / Neón */
@@ -61,7 +74,7 @@ st.markdown("""
         border-radius: 20px;
         padding: 24px;
         box-shadow: 0 8px 32px 0 rgba(255, 0, 127, 0.2);
-        transition: transform 0.3s ease;
+        margin-bottom: 20px;
     }
 
     .info-card {
@@ -147,11 +160,19 @@ except Exception:
 st.markdown('<h1 class="hero-title">🎉 🐷 LA CHANCHA SORTEOS 🐷 🎉</h1>', unsafe_allow_html=True)
 st.markdown('<p class="hero-subtitle">¡Elegí tus números, participá y llevate el pozo en efectivo! 💸✨</p>', unsafe_allow_html=True)
 
+# Aclaración explícita sobre la obligación del pago previo
+st.markdown("""
+<div class="notice-box">
+    <b>📢 REQUISITO PARA PARTICIPAR:</b> Es indispensable realizar la transferencia/pago del ticket antes de registrar tu comprobante. 
+    Los registros sin pago verificado no participan ni tendrán validez en el sorteo.
+</div>
+""", unsafe_allow_html=True)
+
 # Estructura de Pestañas
 tab_comprar, tab_ganadores, tab_admin = st.tabs([
     "🔥 ¡Quiero Participar!",
     "🏆 Salón de la Fama",
-    "⚙️ Zona Secreta (Admin)"
+    "🔒 Administración"
 ])
 
 # ==========================================
@@ -169,7 +190,7 @@ with tab_comprar:
             st.markdown("""
             <div class="fun-card">
                 <h3 style="color: #00f0ff; margin-top: 0;">PASO 1: Paga tus números 💳</h3>
-                <p>Tocá el botón para realizar la transferencia de forma directa y segura con Mercado Pago:</p>
+                <p>Primero realiza el pago correspondiente según la cantidad de tickets que quieras comprar. Tocá el botón para abonar con Mercado Pago:</p>
             </div>
             """, unsafe_allow_html=True)
             
@@ -179,22 +200,22 @@ with tab_comprar:
 
             st.markdown("""
             <div class="fun-card">
-                <h3 style="color: #ffaa00; margin-top: 0;">PASO 2: Carga tu comprobante 🎟️</h3>
-                <p>Ingresá tus datos para que el sistema te asigne automáticamente tus números:</p>
+                <h3 style="color: #ffaa00; margin-top: 0;">PASO 2: Valida tu comprobante 🎟️</h3>
+                <p>Una vez realizado el pago, ingresá tus datos y el N° de comprobante para que el sistema te asigne automáticamente tus números:</p>
             </div>
             """, unsafe_allow_html=True)
 
             with st.form("manual_validation_form"):
                 nombre = st.text_input("👤 Tu Nombre y Apellido*", placeholder="Ej: Cosme Fulanito")
                 email = st.text_input("📧 Tu Email (para enviarte la confirmación)*", placeholder="ejemplo@email.com")
-                cantidad = st.number_input("🎟️️ ¿Cuántos tickets compraste?", min_value=1, max_value=50, value=1)
+                cantidad = st.number_input("🎟 ¿Cuántos tickets compraste y pagaste?", min_value=1, max_value=50, value=1)
                 comprobante = st.text_input("🔢 Nº de Operación / Comprobante MP*", placeholder="Ej: 9876543210")
                 
                 enviar = st.form_submit_button("🎉 ¡VALIDAR Y OBTENER MIS TICKETS!", type="primary", use_container_width=True)
                 
                 if enviar:
                     if not nombre.strip() or not email.strip() or not comprobante.strip():
-                        st.error("⚠️ Por favor completa todos los campos requeridos.")
+                        st.error("⚠️ Por favor completa todos los campos requeridos para validar tu pago.")
                     else:
                         payment_key = f"MP-{comprobante.strip()}"
                         tickets = register_successful_payment(
@@ -206,14 +227,16 @@ with tab_comprar:
                         )
                         if tickets:
                             st.balloons()
-                            st.success("🥳 ¡FELICITACIONES! Ya estás participando.")
-                            st.markdown("### 🎟️️ Tus números asignados son:")
+                            st.success("🥳 ¡PAGO COMPROBADO Y REGISTRADO! Ya estás participando.")
+                            st.markdown("### 🎟 Tus números asignados son:")
                             badge_html = "".join([f'<span class="ticket-badge">#{t}</span>' for t in tickets])
                             st.markdown(badge_html, unsafe_allow_html=True)
                             st.rerun()
 
     with col_f2:
         price_fmt = f"${draw['price']:,.0f}".replace(",", ".")
+        pozo_estimado = len(participants) * draw['price'] * (draw.get('prize_percent', 50.0) / 100.0)
+        pozo_fmt = f"${pozo_estimado:,.0f}".replace(",", ".")
         
         # Cálculo dinámico de tiempo restante
         now = datetime.now()
@@ -233,7 +256,6 @@ with tab_comprar:
 
         formatted_end_date = end_date_obj.strftime("%d/%m/%Y a las %H:%M hs")
 
-        # HTML sin espacios invisibles y alineado correctamente
         info_card_html = f"""
 <div class="info-card">
     <h2 style="margin-top:0; text-align:center; color:#fff;">📊 ESTADO DEL SORTEO</h2>
@@ -241,7 +263,8 @@ with tab_comprar:
     <p style="font-size: 1.1rem; margin-bottom: 8px;">🎯 <b>Sorteo:</b> {draw['name']}</p>
     <p style="font-size: 1.1rem; margin-bottom: 8px;">🔥 <b>Estado:</b> <span style="background:#00f0ff; color:#000; padding:2px 8px; border-radius:8px; font-weight:bold;">{draw['status']}</span></p>
     <p style="font-size: 1.1rem; margin-bottom: 8px;">💰 <b>Valor del Ticket:</b> {price_fmt} ARS</p>
-    <p style="font-size: 1.1rem; margin-bottom: 8px;">⚡ <b>Tickets Vendidos:</b> {len(participants)}</p>
+    <p style="font-size: 1.1rem; margin-bottom: 8px;">🏆 <b>Pozo Acumulado Premio:</b> <span style="color:#ffaa00; font-weight:bold;">{pozo_fmt} ARS</span></p>
+    <p style="font-size: 1.1rem; margin-bottom: 8px;">⚡ <b>Tickets Pagados y Vendidos:</b> {len(participants)}</p>
     <div class="date-card">
         <span style="font-size: 0.9rem; color: #e0c3fc;">📅 FECHA DEL SORTEO</span><br>
         <b style="font-size: 1.2rem; color: #00f0ff;">{formatted_end_date}</b><br>
@@ -269,51 +292,72 @@ with tab_ganadores:
         st.info(f"🕒 El sorteo actual está activo. El ganador/a se anunciará el **{end_date_obj.strftime('%d/%m/%Y a las %H:%M hs')}**.")
 
 # ==========================================
-# PESTAÑA 3: ADMINISTRACIÓN
+# PESTAÑA 3: ADMINISTRACIÓN (PROTEGIDA POR CLAVE)
 # ==========================================
 with tab_admin:
-    st.subheader("⚙️ Panel de Administración")
+    st.subheader("🔒 Panel de Administración Exclusivo")
     
-    col_adm1, col_adm2 = st.columns([1.5, 1], gap="large")
-    
-    with col_adm1:
-        st.write("### 📋 Listado de Participantes")
-        if participants:
-            st.dataframe(participants, use_container_width=True)
-        else:
-            st.info("Aún no se han registrado tickets para este sorteo.")
+    # Sistema de autenticación para el panel
+    if "admin_authenticated" not in st.session_state:
+        st.session_state["admin_authenticated"] = False
 
-    with col_adm2:
-        st.write("### 📅 Programar Fecha del Sorteo")
-        
-        with st.form("form_config_fechas"):
-            nueva_fecha = st.date_input(
-                "Fecha de Cierre",
-                value=end_date_obj.date()
-            )
-            nueva_hora = st.time_input(
-                "Hora de Cierre",
-                value=end_date_obj.time()
-            )
-            
-            btn_guardar_fecha = st.form_submit_button("💾 Guardar Fecha", type="primary", use_container_width=True)
-            
-            if btn_guardar_fecha:
-                nueva_fechahora = datetime.combine(nueva_fecha, nueva_hora)
-                update_draw_dates(draw["id"], datetime.now(), nueva_fechahora)
-                st.success(f"✅ Fecha actualizada al {nueva_fechahora.strftime('%d/%m/%Y %H:%M hs')}")
+    if not st.session_state["admin_authenticated"]:
+        st.warning("Acceso restringido solo para el organizador del sorteo.")
+        pass_input = st.text_input("🔑 Ingrese la contraseña de Administrador:", type="password")
+        if st.button("Ingresar al Panel"):
+            if pass_input == ADMIN_PASSWORD:
+                st.session_state["sorteando"] = True
+                st.success("¡Acceso concedido!")
                 st.rerun()
+            else:
+                st.error("Contraseña incorrecta.")
+    else:
+        # Botón para cerrar sesión de admin
+        if st.button("🚪 Cerrar Sesión de Admin"):
+            st.session_state["admin_authenticated"] = False
+            st.rerun()
 
         st.markdown("---")
-        st.write("### 🎛️ Acciones de Cierre")
-        if draw.get("status") == "ACTIVE":
-            if st.button("🎲 ¡ELEGIR GANADOR Y CERRAR!", type="primary", use_container_width=True):
-                winner = draw_winner(draw["id"])
-                if winner:
-                    st.balloons()
-                    st.success(f"🎉 Ticket Ganador: #{winner['ticket']} - Asignado a: {winner['name']}")
+        col_adm1, col_adm2 = st.columns([1.5, 1], gap="large")
+        
+        with col_adm1:
+            st.write("### 📋 Listado de Participantes con Pago Comprobado")
+            if participants:
+                st.dataframe(participants, use_container_width=True)
+            else:
+                st.info("Aún no se han registrado tickets para este sorteo.")
+
+        with col_adm2:
+            st.write("### 📅 Programar Fecha del Sorteo")
+            
+            with st.form("form_config_fechas"):
+                nueva_fecha = st.date_input(
+                    "Fecha de Cierre",
+                    value=end_date_obj.date()
+                )
+                nueva_hora = st.time_input(
+                    "Hora de Cierre",
+                    value=end_date_obj.time()
+                )
+                
+                btn_guardar_fecha = st.form_submit_button("💾 Guardar Fecha", type="primary", use_container_width=True)
+                
+                if btn_guardar_fecha:
+                    nueva_fechahora = datetime.combine(nueva_fecha, nueva_hora)
+                    update_draw_dates(draw["id"], datetime.now(), nueva_fechahora)
+                    st.success(f"✅ Fecha actualizada al {nueva_fechahora.strftime('%d/%m/%Y %H:%M hs')}")
                     st.rerun()
-                else:
-                    st.warning("No hay tickets registrados para sortear.")
-        else:
-            st.write("🔒 El sorteo se encuentra cerrado.")
+
+            st.markdown("---")
+            st.write("### 🎛️ Acciones de Cierre")
+            if draw.get("status") == "ACTIVE":
+                if st.button("🎲 ¡ELEGIR GANADOR Y CERRAR!", type="primary", use_container_width=True):
+                    winner = draw_winner(draw["id"])
+                    if winner:
+                        st.balloons()
+                        st.success(f"🎉 Ticket Ganador: #{winner['ticket']} - Asignado a: {winner['name']}")
+                        st.rerun()
+                    else:
+                        st.warning("No hay tickets registrados para sortear.")
+            else:
+                st.write("🔒 El sorteo se encuentra cerrado.")
