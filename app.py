@@ -6,31 +6,39 @@ from datetime import datetime
 import streamlit as st
 import mercadopago
 
-# Importar funciones de base de datos desde tu archivo base_de_datos.py
-try:
-    from base_de_datos import get_draw, get_participants, init_db
-    init_db()
-except ImportError:
-    pass
+# 1. IMPORTAR FUNCIONES DESDE TU MÓDULO DE BASE DE DATOS
+# Cambia 'base_de_datos' por el nombre real de tu archivo .py de base de datos si es diferente
+from base_de_datos import conn, init_db, create_draw, get_draw, close_draw, get_participants, register_successful_payment, draw_winner
 
+# Configuración de página
 st.set_page_config(page_title="La Chancha - Sorteos", page_icon="🐷", layout="wide")
 
-# 1. Inicialización segura del SDK de Mercado Pago
+# 2. Inicializar la Base de Datos si no existe
+init_db()
+
+# 3. Inicialización del SDK de Mercado Pago desde los Secrets
 mp_access_token = st.secrets.get("MP_ACCESS_TOKEN", "")
 sdk = mercadopago.SDK(mp_access_token) if mp_access_token else None
 
-# Obtener datos del sorteo activo
-draw = get_draw() or {
-    "id": 1,
-    "name": "Sorteo Demo",
-    "price": 1000.0,
-    "status": "ACTIVE"
-}
-participants = get_participants(draw["id"]) if "get_participants" in globals() else []
+# 4. Obtener datos del sorteo activo desde SQLite
+draw = get_draw()
+
+# Si la base de datos está vacía, crea un sorteo por defecto
+if not draw:
+    create_draw(
+        name="Sorteo Inicial La Chancha",
+        price=1000.0,
+        start=datetime.now(),
+        end=datetime.now(),
+        prize_percent=50.0
+    )
+    draw = get_draw()
+
+participants = get_participants(draw["id"])
 
 st.title("🐷 La Chancha - Sistema de Sorteos")
 
-# 2. DEFINICIÓN DE PESTAÑAS (Esto resuelve el NameError)
+# 5. Definir pestañas de la UI
 tab_comprar, tab_ganadores, tab_admin = st.tabs(["🛒 Comprar Participaciones", "🏆 Ganadores", "⚙️ Administración"])
 
 # --- PESTAÑA 1: COMPRA DE PARTICIPACIONES ---
@@ -56,7 +64,7 @@ with tab_comprar:
                 
                 if enviar:
                     if not nombre or not email:
-                        st.error("⚠️️ Por favor completa tu nombre y correo electrónico.")
+                        st.error("⚠️ Por favor completa tu nombre y correo electrónico.")
                     elif not sdk:
                         st.error("🔑 Falta configurar `MP_ACCESS_TOKEN` en los Secrets de Streamlit.")
                     else:
@@ -87,7 +95,6 @@ with tab_comprar:
                             "external_reference": f"DRAW_{draw['id']}_{int(time.time())}"
                         }
 
-                        # Conexión con spinner
                         with st.spinner("Conectando con Mercado Pago..."):
                             try:
                                 preference_response = sdk.preference().create(preference_data)
@@ -119,8 +126,12 @@ with tab_comprar:
 
 with tab_ganadores:
     st.subheader("🏆 Ganadores de Sorteos Anteriores")
-    st.info("Aquí se mostrarán los ganadores de los sorteos finalizados.")
+    if draw.get("status") == "CLOSED" and draw.get("winning_ticket"):
+        st.success(f"🎟 Ticket Ganador: **{draw['winning_ticket']}**")
+    else:
+        st.info("El sorteo actual está activo. Los ganadores aparecerán al finalizar.")
 
 with tab_admin:
     st.subheader("⚙️ Panel de Administración")
-    st.info("Espacio para gestionar los sorteos y ver las ventas.")
+    st.dataframe(participants)
+    
