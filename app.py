@@ -273,7 +273,38 @@ with tab_comprar:
 </div>
 """
         st.markdown(info_card_html, unsafe_allow_html=True)
+# --- AGREGAR ESTO AL PIE DE LA PESTAÑA DE COMPRA ---
+    st.markdown("---")
+    with st.expander("📜 Bases, Condiciones y Transparencia del Sorteo — La Chancha"):
+        st.markdown("""
+        ### 1. Generalidades y Organización
+        * **1.1.** **La Chancha** es una plataforma de entretenimiento y participación voluntaria destinada exclusivamente a mayores de 18 años residentes en la República Argentina.
+        * **1.2.** La participación en los sorteos implica el conocimiento y la aceptación total de las presentes Bases y Condiciones.
 
+        ### 2. Mecánica de Participación
+        * **2.1.** Para participar, el usuario debe adquirir uno o más tickets mediante los canales de pago autorizados informados en la web.
+        * **2.2.** El valor de cada ticket es el publicado en la pantalla principal al momento de la compra.
+        * **2.3.** Una vez acreditado el pago y validado el comprobante correspondiente, el sistema asignará de forma automática e inequívoca uno o más números de serie únicos a favor del participante.
+        * **2.4.** Los números asignados podrán ser visualizados por el usuario en su panel personal dentro de la plataforma.
+
+        ### 3. Conformación del Pozo y Premio
+        * **3.1.** El pozo total acumulado se conforma en base a la recaudación obtenida por la venta de tickets en el período vigente.
+        * **3.2.** El premio a entregar al ganador consistirá exactamente en el **50% (cincuenta por ciento)** del total recaudado en dicho pozo. El porcentaje restante se destina a gastos operativos, pasarelas de pago, mantenimiento y sustentabilidad de la plataforma.
+
+        ### 4. Sorteo y Sistema de Selección (Sorteador Propio)
+        * **4.1.** El sorteo se realizará de forma automatizada mediante el motor de selección aleatoria (algoritmo RNG) integrado en la plataforma al finalizar la cuenta regresiva.
+        * **4.2.** El sistema informático seleccionará de manera transparente y al azar uno de los números válidos emitidos durante el período del sorteo.
+        * **4.3.** Para garantizar la máxima transparencia, el proceso de ejecución del sorteo podrá ser documentado o transmitido a través de nuestros canales oficiales y publicado en el "Salón de la Fama".
+
+        ### 5. Notificación y Entrega del Premio
+        * **5.1.** El usuario ganador será notificado a través de los datos de contacto provistos al registrar su ticket.
+        * **5.2.** Para la adjudicación y entrega formal del premio (transferencia a cuenta bancaria o billetera virtual a nombre del titular), el ganador deberá acreditar fehacientemente su identidad mediante la presentación de su DNI y ser mayor de edad.
+        * **5.3.** En caso de que el ganador no responda o no valide su identidad dentro de las 72 horas corridas desde la notificación, se procederá a realizar un nuevo sorteo o el pozo quedará acumulado según las políticas del evento.
+
+        ### 6. Responsabilidad y Condiciones Técnicas
+        * **6.1.** La plataforma no se hace responsable por fallas en las conexiones de internet, interrupciones de las pasarelas de pago externas (como Mercado Pago) o errores en la carga de comprobantes por parte de los usuarios.
+        * **6.2.** La participación en La Chancha constituye un concurso de entretenimiento privado gestionado bajo los términos de este reglamento.
+        """)
 # ==========================================
 # PESTAÑA 2: GANADORES
 # ==========================================
