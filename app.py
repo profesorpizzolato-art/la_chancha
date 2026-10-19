@@ -141,7 +141,7 @@ draw = get_draw()
 if not draw:
     create_draw(
         name="🐷 Gran Sorteo La Chancha 🚀",
-        price=1000.0,
+        price=3000.0,
         start=datetime.now(),
         end=datetime.now(),
         prize_percent=50.0
