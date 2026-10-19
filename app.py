@@ -391,11 +391,19 @@ with tab_admin:
             # -------------------------------------------------------------
             else:
                 st.write("### 🚀 Largar un Nuevo Sorteo")
-                st.info("El sorteo actual está CERRADO. Completa los datos para iniciar la siguiente edición:")
+                st.info("El sorteo actual está CERRADO. Configura los datos y el nuevo precio para iniciar la siguiente edición:")
                 
                 with st.form("form_nuevo_sorteo"):
                     nuevo_nombre = st.text_input("Nombre del Sorteo", value="🐷 Gran Sorteo La Chancha - Nueva Edición")
-                    nuevo_precio = st.number_input("Precio por Ticket (ARS)", min_value=100.0, value=1000.0, step=100.0)
+                    
+                    # 🛠️ AQUÍ AGREGAMOS EL CAMPO PARA MODIFICAR EL PRECIO DEL TICKET
+                    nuevo_precio = st.number_input(
+                        "💵 Precio por Ticket (ARS)", 
+                        min_value=100.0, 
+                        value=3000.0,  # Valor por defecto actual
+                        step=500.0
+                    )
+                    
                     fecha_fin = st.date_input("Fecha de Realización", value=date.today())
                     hora_fin = st.time_input("Hora de Realización", value=dtime(22, 0))
                     
@@ -403,14 +411,14 @@ with tab_admin:
                     
                     if btn_crear:
                         fechahora_fin = datetime.combine(fecha_fin, hora_fin)
-                        # Creamos el nuevo sorteo
+                        # Creamos el nuevo sorteo pasando el precio personalizado
                         create_draw(
                             name=nuevo_nombre,
-                            price=nuevo_precio,
+                            price=float(nuevo_precio),  # <--- Usamos el precio ingresado
                             start=datetime.now(),
                             end=fechahora_fin,
                             prize_percent=50.0
                         )
                         st.balloons()
-                        st.success("🎉 ¡Nuevo sorteo iniciado con éxito!")
+                        st.success(f"🎉 ¡Nuevo sorteo iniciado con éxito con tickets a ${float(nuevo_precio):,.0f}!")
                         st.rerun()
