@@ -141,7 +141,7 @@ draw = get_draw()
 if not draw:
     create_draw(
         name="🐷 Gran Sorteo La Chancha 🚀",
-        price=3000.0,
+        price=2000.0,
         start=datetime.now(),
         end=datetime.now(),
         prize_percent=50.0
@@ -185,7 +185,7 @@ with tab_comprar:
         if draw.get("status") == "CLOSED":
             st.error("🔒 ¡Este sorteo ya cerró! Mantente atento para el próximo lanzamiento 🚀")
         else:
-            static_mp_link = st.secrets.get("MP_STATIC_LINK", "https://mpago.la/19yACmp")
+            static_mp_link = st.secrets.get("MP_STATIC_LINK", "https://mpago.la/1VZa4mj")
             
             st.markdown("""
             <div class="fun-card">
